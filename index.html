@@ -100,6 +100,7 @@
 
     function SoftballPlayerRater() {
       const [players, setPlayers] = useState([]);
+      const [modal, setModal] = useState({ visible: false, title: '', message: '' });
       const [editingId, setEditingId] = useState(null);
       const [currentPlayer, setCurrentPlayer] = useState({
         number: '',
@@ -127,13 +128,21 @@
         }
       }, [players]);
 
+      useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === 'Escape' && modal.visible) setModal({ visible: false, title: '', message: '' });
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [modal.visible]);
+
       const addPlayer = () => {
         if (currentPlayer.number.trim()) {
           const totalScore = currentPlayer.hitting + currentPlayer.popfly + currentPlayer.fielding + currentPlayer.throwing;
           // Prevent duplicate player numbers
           const numberToAdd = currentPlayer.number.trim();
           if (players.some(p => String(p.number).trim() === numberToAdd)) {
-            alert('A player with that number already exists. Please choose a different number.');
+            setModal({ visible: true, title: 'Duplicate Number', message: 'A player with that number already exists. Please choose a different number.' });
             return;
           }
 
@@ -159,12 +168,12 @@
         // Prevent duplicate player numbers when saving edits
         const editedNumber = String(currentPlayer.number || '').trim();
         if (!editedNumber) {
-          alert('Player number is required.');
+          setModal({ visible: true, title: 'Missing Number', message: 'Player number is required.' });
           return;
         }
 
         if (players.some(p => p.id !== editingId && String(p.number).trim() === editedNumber)) {
-          alert('A player with that number already exists. Please choose a different number.');
+          setModal({ visible: true, title: 'Duplicate Number', message: 'A player with that number already exists. Please choose a different number.' });
           return;
         }
 
@@ -401,6 +410,31 @@
               </div>
             )}
           </div>
+
+          {modal.visible && (
+            <div
+              className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+              onClick={() => setModal({ visible: false, title: '', message: '' })}
+            >
+              <div
+                className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl text-center"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+              >
+                <div className="text-3xl font-black text-gray-800 mb-2">{modal.title}</div>
+                <div className="text-sm text-gray-600 mb-4">{modal.message}</div>
+                <button
+                  onClick={() => setModal({ visible: false, title: '', message: '' })}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-black py-3 rounded-xl shadow-lg active:scale-95 transition"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
       );
     }
