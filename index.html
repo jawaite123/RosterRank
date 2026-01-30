@@ -140,13 +140,12 @@
             // Try production path first
             let response = await fetch('/rosterrank/changelog.json');
 
-            // Check if we got JSON content
-            const contentType = response.headers.get('content-type');
-            if (!response.ok || !contentType || !contentType.includes('application/json')) {
+            if (!response.ok) {
               // Fallback to relative path for local development
               response = await fetch('./changelog.json');
             }
 
+            // Parse JSON regardless of content-type (GitHub Pages may not set it correctly)
             const data = await response.json();
             setAppVersion(data.version);
             setChangelog(data.releases);
