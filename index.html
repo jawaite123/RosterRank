@@ -130,7 +130,13 @@
       const addPlayer = () => {
         if (currentPlayer.number.trim()) {
           const totalScore = currentPlayer.hitting + currentPlayer.popfly + currentPlayer.fielding + currentPlayer.throwing;
-          
+          // Prevent duplicate player numbers
+          const numberToAdd = currentPlayer.number.trim();
+          if (players.some(p => String(p.number).trim() === numberToAdd)) {
+            alert('A player with that number already exists. Please choose a different number.');
+            return;
+          }
+
           setPlayers([...players, { ...currentPlayer, id: Date.now(), totalScore }]);
           setCurrentPlayer({
             number: '',
@@ -150,13 +156,24 @@
 
       const saveEdit = () => {
         const totalScore = currentPlayer.hitting + currentPlayer.popfly + currentPlayer.fielding + currentPlayer.throwing;
-        
+        // Prevent duplicate player numbers when saving edits
+        const editedNumber = String(currentPlayer.number || '').trim();
+        if (!editedNumber) {
+          alert('Player number is required.');
+          return;
+        }
+
+        if (players.some(p => p.id !== editingId && String(p.number).trim() === editedNumber)) {
+          alert('A player with that number already exists. Please choose a different number.');
+          return;
+        }
+
         setPlayers(players.map(p => 
           p.id === editingId 
             ? { ...currentPlayer, totalScore }
             : p
         ));
-        
+
         cancelEdit();
       };
 
