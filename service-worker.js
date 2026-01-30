@@ -13,10 +13,15 @@ const urlsToCache = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache).catch(() => {
-        // It's ok if some URLs fail to cache (e.g., CDNs)
-        console.log('Some resources could not be cached');
-      });
+      // Cache each URL individually so that failures don't break installation
+      return Promise.allSettled(
+        urlsToCache.map(url =>
+          cache.add(url).catch(err => {
+            console.log('Failed to cache:', url, err);
+            return null;
+          })
+        )
+      );
     })
   );
   self.skipWaiting(); // Activate immediately

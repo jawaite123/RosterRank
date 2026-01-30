@@ -121,7 +121,7 @@
       const [modal, setModal] = useState({ visible: false, title: '', message: '', onAction: null, actionLabel: '' });
       const [updateModal, setUpdateModal] = useState(false);
       const [editingId, setEditingId] = useState(null);
-      const [appVersion, setAppVersion] = useState('1.0.0');
+      const [appVersion, setAppVersion] = useState(null);
       const [changelog, setChangelog] = useState({});
       const [currentPlayer, setCurrentPlayer] = useState({
         number: '',
@@ -135,25 +135,40 @@
       // Load changelog from external file
       useEffect(() => {
         // Try both paths - production (/rosterrank/) and local (relative)
-        fetch('/rosterrank/changelog.json')
-          .then(response => {
-            if (!response.ok) throw new Error('Not found at /rosterrank/');
-            return response.json();
-          })
-          .catch(() => {
-            // Fallback to relative path for local development
-            return fetch('./changelog.json').then(r => r.json());
-          })
-          .then(data => {
+        const tryFetch = async () => {
+          try {
+            // Try production path first
+            let response = await fetch('/rosterrank/changelog.json');
+
+            // Check if we got JSON content
+            const contentType = response.headers.get('content-type');
+            if (!response.ok || !contentType || !contentType.includes('application/json')) {
+              // Fallback to relative path for local development
+              response = await fetch('./changelog.json');
+            }
+
+            const data = await response.json();
             setAppVersion(data.version);
             setChangelog(data.releases);
-          })
-          .catch(error => {
+
+            // Check if user has seen this version (only after successful load)
+            const lastSeenVersion = localStorage.getItem('lastSeenVersion');
+            if (lastSeenVersion !== data.version) {
+              // Don't auto-show on first visit, only on updates
+              if (lastSeenVersion !== null) {
+                setUpdateModal(true);
+              }
+              localStorage.setItem('lastSeenVersion', data.version);
+            }
+          } catch (error) {
             console.error('Error loading changelog:', error);
-            // Fallback to default version if fetch fails
+            // Fallback to default version if all fetch attempts fail
             setAppVersion('1.0.0');
             setChangelog({});
-          });
+          }
+        };
+
+        tryFetch();
       }, []);
 
       // Make setUpdateModal available globally for service worker
@@ -161,20 +176,6 @@
         window.showUpdateModal = () => setUpdateModal(true);
         return () => delete window.showUpdateModal;
       }, []);
-
-      // Check if user has seen this version
-      useEffect(() => {
-        if (!appVersion) return; // Wait for version to load
-
-        const lastSeenVersion = localStorage.getItem('lastSeenVersion');
-        if (lastSeenVersion !== appVersion) {
-          // Don't auto-show on first visit, only on updates
-          if (lastSeenVersion !== null) {
-            setUpdateModal(true);
-          }
-          localStorage.setItem('lastSeenVersion', appVersion);
-        }
-      }, [appVersion]);
 
       const currentChangelog = changelog[appVersion] || { date: '', changes: [] };
 
@@ -501,14 +502,16 @@
             )}
 
             {/* Version Footer */}
-            <div className="text-center mt-4 mb-2">
-              <button
-                onClick={() => setUpdateModal(true)}
-                className="text-white/70 hover:text-white text-xs font-bold transition"
-              >
-                v{appVersion} - What's New?
-              </button>
-            </div>
+            {appVersion && (
+              <div className="text-center mt-4 mb-2">
+                <button
+                  onClick={() => setUpdateModal(true)}
+                  className="text-white/70 hover:text-white text-xs font-bold transition"
+                >
+                  v{appVersion} - What's New?
+                </button>
+              </div>
+            )}
           </div>
 
           {modal.visible && (
