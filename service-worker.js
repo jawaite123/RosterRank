@@ -1,10 +1,11 @@
 // IMPORTANT: Increment this version number every time you deploy changes
 // Example: 'rosterrank-v1', 'rosterrank-v2', 'rosterrank-v3', etc.
 const CACHE_NAME = 'rosterrank-v3';
+const BASE_PATH = '/rosterrank';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  BASE_PATH + '/',
+  BASE_PATH + '/index.html',
+  BASE_PATH + '/manifest.json'
 ];
 
 // Install event - cache files
