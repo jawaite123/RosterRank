@@ -1,0 +1,31 @@
+{
+  "version": "1.2.0",
+  "releases": {
+    "1.2.0": {
+      "date": "2026-01-30",
+      "changes": [
+        "Enhanced modal dialogs with beautiful animations",
+        "Improved duplicate detection with clear warnings",
+        "Better user experience and visual polish",
+        "Dynamic changelog system for tracking updates"
+      ]
+    },
+    "1.1.0": {
+      "date": "2026-01-29",
+      "changes": [
+        "Added duplicate player number detection",
+        "Improved modal design",
+        "Bug fixes and performance improvements"
+      ]
+    },
+    "1.0.0": {
+      "date": "2026-01-28",
+      "changes": [
+        "Initial release",
+        "Player rating system",
+        "CSV export functionality",
+        "PWA support"
+      ]
+    }
+  }
+}
