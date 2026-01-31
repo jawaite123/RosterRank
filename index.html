@@ -16,6 +16,35 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script>
+    // Firebase configuration - Replace with your Firebase project config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBRw7vvxAFtx5q5dN0G70Xde_JX7ZqGdQ",
+      authDomain: "rosterrank-37d0a.firebaseapp.com",
+      projectId: "rosterrank-37d0a",
+      storageBucket: "rosterrank-37d0a.firebasestorage.app",
+      messagingSenderId: "98560724581",
+      appId: "1:98560724581:web:eb451ba3ff560d11da808c"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Enable offline persistence
+    db.enablePersistence().catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.log('Multiple tabs open, persistence only enabled in one tab.');
+      } else if (err.code === 'unimplemented') {
+        console.log('Browser does not support persistence.');
+      }
+    });
+  </script>
   <style>
     /* Custom slider styling */
     input[type="range"] {
@@ -116,6 +145,33 @@
       </svg>
     );
 
+    const Cloud = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+      </svg>
+    );
+
+    const CloudOff = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="m2 2 20 20"></path>
+        <path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"></path>
+        <path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"></path>
+      </svg>
+    );
+
+    const Loader = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="12" y1="2" x2="12" y2="6"></line>
+        <line x1="12" y1="18" x2="12" y2="22"></line>
+        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+        <line x1="2" y1="12" x2="6" y2="12"></line>
+        <line x1="18" y1="12" x2="22" y2="12"></line>
+        <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+        <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+      </svg>
+    );
+
     function SoftballPlayerRater() {
       const [players, setPlayers] = useState([]);
       const [modal, setModal] = useState({ visible: false, title: '', message: '', onAction: null, actionLabel: '' });
@@ -131,6 +187,9 @@
         throwing: 5,
         comments: ''
       });
+      const [userId, setUserId] = useState(null);
+      const [isLoading, setIsLoading] = useState(true);
+      const [syncStatus, setSyncStatus] = useState('offline'); // 'synced', 'syncing', 'offline', 'error'
 
       // Load changelog from external file
       useEffect(() => {
@@ -178,22 +237,99 @@
 
       const currentChangelog = changelog[appVersion] || { date: '', changes: [] };
 
+      // Anonymous authentication
       useEffect(() => {
-        const saved = localStorage.getItem('softballPlayers');
-        if (saved) {
-          try {
-            setPlayers(JSON.parse(saved));
-          } catch (e) {
-            console.error('Error loading saved data:', e);
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            setUserId(user.uid);
+          } else {
+            // Sign in anonymously
+            try {
+              await auth.signInAnonymously();
+            } catch (error) {
+              console.error('Auth error:', error);
+              setSyncStatus('error');
+              // Fall back to localStorage
+              const saved = localStorage.getItem('softballPlayers');
+              if (saved) {
+                try {
+                  setPlayers(JSON.parse(saved));
+                } catch (e) {
+                  console.error('Error loading saved data:', e);
+                }
+              }
+              setIsLoading(false);
+            }
           }
-        }
+        });
+        return () => unsubscribe();
       }, []);
 
+      // Firestore real-time sync
       useEffect(() => {
-        if (players.length > 0) {
-          localStorage.setItem('softballPlayers', JSON.stringify(players));
-        }
-      }, [players]);
+        if (!userId) return;
+
+        setSyncStatus('syncing');
+
+        // Set up real-time listener
+        const unsubscribe = db.collection('users').doc(userId).collection('players')
+          .orderBy('totalScore', 'desc')
+          .onSnapshot(
+            (snapshot) => {
+              const firestorePlayers = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }));
+
+              // If Firestore is empty but localStorage has data, migrate it
+              if (firestorePlayers.length === 0) {
+                const saved = localStorage.getItem('softballPlayers');
+                if (saved) {
+                  try {
+                    const localPlayers = JSON.parse(saved);
+                    if (localPlayers.length > 0) {
+                      // Migrate localStorage data to Firestore
+                      const batch = db.batch();
+                      localPlayers.forEach(player => {
+                        const docRef = db.collection('users').doc(userId).collection('players').doc(String(player.id));
+                        batch.set(docRef, player);
+                      });
+                      batch.commit().then(() => {
+                        console.log('Migrated localStorage data to Firestore');
+                      });
+                      setPlayers(localPlayers);
+                    }
+                  } catch (e) {
+                    console.error('Error migrating data:', e);
+                  }
+                }
+              } else {
+                setPlayers(firestorePlayers);
+                // Keep localStorage in sync for offline fallback
+                localStorage.setItem('softballPlayers', JSON.stringify(firestorePlayers));
+              }
+
+              setSyncStatus('synced');
+              setIsLoading(false);
+            },
+            (error) => {
+              console.error('Firestore sync error:', error);
+              setSyncStatus('error');
+              // Fall back to localStorage
+              const saved = localStorage.getItem('softballPlayers');
+              if (saved) {
+                try {
+                  setPlayers(JSON.parse(saved));
+                } catch (e) {
+                  console.error('Error loading saved data:', e);
+                }
+              }
+              setIsLoading(false);
+            }
+          );
+
+        return () => unsubscribe();
+      }, [userId]);
 
       useEffect(() => {
         const onKey = (e) => {
@@ -206,7 +342,7 @@
         return () => window.removeEventListener('keydown', onKey);
       }, [modal.visible, updateModal]);
 
-      const addPlayer = () => {
+      const addPlayer = async () => {
         if (currentPlayer.number.trim()) {
           const totalScore = currentPlayer.hitting + currentPlayer.popfly + currentPlayer.fielding + currentPlayer.throwing;
           // Prevent duplicate player numbers
@@ -226,7 +362,27 @@
             return;
           }
 
-          setPlayers([...players, { ...currentPlayer, id: Date.now(), totalScore }]);
+          const newPlayer = { ...currentPlayer, id: Date.now(), totalScore };
+
+          // Save to Firestore if authenticated
+          if (userId) {
+            setSyncStatus('syncing');
+            try {
+              await db.collection('users').doc(userId).collection('players').doc(String(newPlayer.id)).set(newPlayer);
+              setSyncStatus('synced');
+            } catch (error) {
+              console.error('Error saving player:', error);
+              setSyncStatus('error');
+              // Still add to local state as fallback
+              setPlayers([...players, newPlayer]);
+              localStorage.setItem('softballPlayers', JSON.stringify([...players, newPlayer]));
+            }
+          } else {
+            // Offline fallback
+            setPlayers([...players, newPlayer]);
+            localStorage.setItem('softballPlayers', JSON.stringify([...players, newPlayer]));
+          }
+
           setCurrentPlayer({
             number: '',
             hitting: 5,
@@ -243,7 +399,7 @@
         setCurrentPlayer({ ...player });
       };
 
-      const saveEdit = () => {
+      const saveEdit = async () => {
         const totalScore = currentPlayer.hitting + currentPlayer.popfly + currentPlayer.fielding + currentPlayer.throwing;
         // Prevent duplicate player numbers when saving edits
         const editedNumber = String(currentPlayer.number || '').trim();
@@ -267,11 +423,28 @@
           return;
         }
 
-        setPlayers(players.map(p => 
-          p.id === editingId 
-            ? { ...currentPlayer, totalScore }
-            : p
-        ));
+        const updatedPlayer = { ...currentPlayer, totalScore };
+
+        // Save to Firestore if authenticated
+        if (userId) {
+          setSyncStatus('syncing');
+          try {
+            await db.collection('users').doc(userId).collection('players').doc(String(editingId)).set(updatedPlayer);
+            setSyncStatus('synced');
+          } catch (error) {
+            console.error('Error updating player:', error);
+            setSyncStatus('error');
+            // Still update local state as fallback
+            const updatedPlayers = players.map(p => p.id === editingId ? updatedPlayer : p);
+            setPlayers(updatedPlayers);
+            localStorage.setItem('softballPlayers', JSON.stringify(updatedPlayers));
+          }
+        } else {
+          // Offline fallback
+          const updatedPlayers = players.map(p => p.id === editingId ? updatedPlayer : p);
+          setPlayers(updatedPlayers);
+          localStorage.setItem('softballPlayers', JSON.stringify(updatedPlayers));
+        }
 
         cancelEdit();
       };
@@ -288,10 +461,34 @@
         });
       };
 
-      const deletePlayer = (id) => {
-        setPlayers(players.filter(p => p.id !== id));
-        if (players.length === 1) {
-          localStorage.removeItem('softballPlayers');
+      const deletePlayer = async (id) => {
+        // Delete from Firestore if authenticated
+        if (userId) {
+          setSyncStatus('syncing');
+          try {
+            await db.collection('users').doc(userId).collection('players').doc(String(id)).delete();
+            setSyncStatus('synced');
+          } catch (error) {
+            console.error('Error deleting player:', error);
+            setSyncStatus('error');
+            // Still delete from local state as fallback
+            const remainingPlayers = players.filter(p => p.id !== id);
+            setPlayers(remainingPlayers);
+            if (remainingPlayers.length === 0) {
+              localStorage.removeItem('softballPlayers');
+            } else {
+              localStorage.setItem('softballPlayers', JSON.stringify(remainingPlayers));
+            }
+          }
+        } else {
+          // Offline fallback
+          const remainingPlayers = players.filter(p => p.id !== id);
+          setPlayers(remainingPlayers);
+          if (remainingPlayers.length === 0) {
+            localStorage.removeItem('softballPlayers');
+          } else {
+            localStorage.setItem('softballPlayers', JSON.stringify(remainingPlayers));
+          }
         }
       };
 
@@ -343,6 +540,34 @@
         };
       };
 
+      const getSyncStatusDisplay = () => {
+        switch (syncStatus) {
+          case 'synced':
+            return { icon: <Cloud size={14} />, text: 'Synced', color: 'text-green-300' };
+          case 'syncing':
+            return { icon: <Loader size={14} className="animate-spin" />, text: 'Syncing...', color: 'text-yellow-300' };
+          case 'error':
+            return { icon: <CloudOff size={14} />, text: 'Sync error', color: 'text-red-300' };
+          default:
+            return { icon: <CloudOff size={14} />, text: 'Offline', color: 'text-gray-300' };
+        }
+      };
+
+      const syncDisplay = getSyncStatusDisplay();
+
+      // Show loading screen while initializing
+      if (isLoading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-green-600 via-emerald-700 to-teal-800 flex items-center justify-center" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚾</div>
+              <Loader size={32} className="animate-spin text-white mx-auto mb-2" />
+              <p className="text-white font-bold">Loading...</p>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-600 via-emerald-700 to-teal-800 p-3 sm:p-6" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
           <div className="max-w-2xl mx-auto">
@@ -352,6 +577,11 @@
                 ⚾ RosterRANK
               </h1>
               <p className="text-yellow-300 font-bold text-lg">Rate Your Players</p>
+              {/* Sync Status */}
+              <div className={`inline-flex items-center gap-1 mt-1 text-xs ${syncDisplay.color}`}>
+                {syncDisplay.icon}
+                <span>{syncDisplay.text}</span>
+              </div>
             </div>
 
             {/* Form */}
