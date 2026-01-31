@@ -354,40 +354,53 @@
                 ...doc.data()
               }));
 
-              // If Firestore is empty but localStorage has data, migrate it (only once)
+              // If Firestore is empty but localStorage has data, migrate it (only once per session)
               if (firestorePlayers.length === 0 && !hasMigratedRef.current) {
-                // Try main storage first, then backup
-                const saved = localStorage.getItem('softballPlayers') || localStorage.getItem('softballPlayersBackup');
-                if (saved) {
-                  try {
-                    const localPlayers = JSON.parse(saved);
-                    if (localPlayers.length > 0) {
-                      // Migrate localStorage data to Firestore
-                      const batch = db.batch();
-                      localPlayers.forEach(player => {
-                        const docRef = db.collection('users').doc(userId).collection('players').doc(String(player.id));
-                        batch.set(docRef, player);
-                      });
-                      batch.commit().then(() => {
-                        console.log('Migrated localStorage data to Firestore');
-                      });
-                      setPlayers(localPlayers);
+                // Check if user previously had data synced (indicates intentional deletion vs first time)
+                const hadSyncedBefore = localStorage.getItem('rosterRankHasSynced') === 'true';
+
+                if (!hadSyncedBefore) {
+                  // First time user or fresh install - try to migrate existing localStorage data
+                  const saved = localStorage.getItem('softballPlayers') || localStorage.getItem('softballPlayersBackup');
+                  if (saved) {
+                    try {
+                      const localPlayers = JSON.parse(saved);
+                      if (localPlayers.length > 0) {
+                        // Migrate localStorage data to Firestore
+                        const batch = db.batch();
+                        localPlayers.forEach(player => {
+                          const docRef = db.collection('users').doc(userId).collection('players').doc(String(player.id));
+                          batch.set(docRef, player);
+                        });
+                        batch.commit().then(() => {
+                          console.log('Migrated localStorage data to Firestore');
+                          localStorage.setItem('rosterRankHasSynced', 'true');
+                        });
+                        setPlayers(localPlayers);
+                      }
+                    } catch (e) {
+                      console.error('Error migrating data:', e);
                     }
-                  } catch (e) {
-                    console.error('Error migrating data:', e);
                   }
+                } else {
+                  // User had synced before but Firestore is empty - they deleted all players
+                  setPlayers([]);
+                  // Clear localStorage to prevent unwanted restoration and confusing "restore" button
+                  localStorage.setItem('softballPlayers', JSON.stringify([]));
+                  localStorage.removeItem('softballPlayersBackup');
                 }
                 hasMigratedRef.current = true;
               } else if (firestorePlayers.length === 0) {
-                // Firestore is empty and we've already migrated - user deleted all players
+                // Firestore is empty and we've already checked migration this session
                 setPlayers([]);
-                // Don't remove localStorage - keep as backup for recovery
               } else {
                 setPlayers(firestorePlayers);
                 // Keep localStorage in sync for offline fallback
                 localStorage.setItem('softballPlayers', JSON.stringify(firestorePlayers));
-                // Also save a backup copy that won't be deleted
+                // Also save a backup copy for recovery
                 localStorage.setItem('softballPlayersBackup', JSON.stringify(firestorePlayers));
+                // Mark that user has successfully synced (to distinguish from first-time users)
+                localStorage.setItem('rosterRankHasSynced', 'true');
                 hasMigratedRef.current = true;
               }
 
