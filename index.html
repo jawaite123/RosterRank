@@ -222,12 +222,15 @@
         // Try both paths - production (/rosterrank/) and local (relative)
         const tryFetch = async () => {
           try {
+            // Use cache: 'no-store' to always get fresh changelog data
+            const fetchOptions = { cache: 'no-store' };
+
             // Try production path first
-            let response = await fetch('/rosterrank/changelog.json');
+            let response = await fetch('/rosterrank/changelog.json', fetchOptions);
 
             if (!response.ok) {
               // Fallback to relative path for local development
-              response = await fetch('./changelog.json');
+              response = await fetch('./changelog.json', fetchOptions);
             }
 
             // Parse JSON regardless of content-type (GitHub Pages may not set it correctly)
@@ -257,7 +260,23 @@
 
       // Make setUpdateModal available globally for service worker
       useEffect(() => {
-        window.showUpdateModal = () => setUpdateModal(true);
+        window.showUpdateModal = async () => {
+          // Re-fetch changelog to get the latest version info
+          try {
+            const fetchOptions = { cache: 'no-store' };
+            let response = await fetch('/rosterrank/changelog.json', fetchOptions);
+            if (!response.ok) {
+              response = await fetch('./changelog.json', fetchOptions);
+            }
+            const data = await response.json();
+            setAppVersion(data.version);
+            setChangelog(data.releases);
+            localStorage.setItem('lastSeenVersion', data.version);
+          } catch (error) {
+            console.error('Error refreshing changelog:', error);
+          }
+          setUpdateModal(true);
+        };
         return () => delete window.showUpdateModal;
       }, []);
 
