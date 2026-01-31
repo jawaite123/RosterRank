@@ -606,13 +606,21 @@
             console.error('Error restoring player:', error);
             setSyncStatus('error');
             // Still restore to local state as fallback
-            const updatedPlayers = [...players, playerToRestore].sort((a, b) => b.totalScore - a.totalScore);
+            const updatedPlayers = [...players, playerToRestore].sort((a, b) => {
+              if (a.starred && !b.starred) return -1;
+              if (!a.starred && b.starred) return 1;
+              return b.totalScore - a.totalScore;
+            });
             setPlayers(updatedPlayers);
             localStorage.setItem('softballPlayers', JSON.stringify(updatedPlayers));
           }
         } else {
           // Offline fallback
-          const updatedPlayers = [...players, playerToRestore].sort((a, b) => b.totalScore - a.totalScore);
+          const updatedPlayers = [...players, playerToRestore].sort((a, b) => {
+            if (a.starred && !b.starred) return -1;
+            if (!a.starred && b.starred) return 1;
+            return b.totalScore - a.totalScore;
+          });
           setPlayers(updatedPlayers);
           localStorage.setItem('softballPlayers', JSON.stringify(updatedPlayers));
         }
@@ -623,11 +631,12 @@
           alert('No players to export!');
           return;
         }
-        
-        const headers = ['Player Number', 'Hitting', 'Pop Fly', 'Fielding', 'Throwing', 'Total Score', 'Comments'];
-        
+
+        const headers = ['Player Number', 'Starred', 'Hitting', 'Pop Fly', 'Fielding', 'Throwing', 'Total Score', 'Comments'];
+
         const rows = players.map(player => [
           player.number,
+          player.starred ? 'Yes' : 'No',
           player.hitting,
           player.popfly || player.bunting || 0,
           player.fielding,
