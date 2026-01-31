@@ -774,13 +774,13 @@
                   <Star size={24} filled={currentPlayer.starred} />
                 </button>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   value={currentPlayer.number}
                   onChange={(e) => setCurrentPlayer({...currentPlayer, number: e.target.value.replace(/[^0-9]/g, '')})}
-                  className="flex-1 px-4 py-3 text-2xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-lg focus:outline-none focus:border-amber-500 text-white placeholder-slate-500"
+                  className="flex-1 min-w-0 px-4 py-3 text-2xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-lg focus:outline-none focus:border-amber-500 text-white placeholder-slate-500"
                   placeholder="# Player Number"
-                  min="0"
                 />
               </div>
 
