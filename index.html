@@ -942,11 +942,42 @@
               <button
                 onClick={() => {
                   const previousId = localStorage.getItem('rosterRankPreviousUserId');
-                  let message = `Account ID:\n${userId || 'Not connected'}\n\n`;
-                  if (previousId) {
-                    message += `⚠️ Previous ID detected:\n${previousId}\n\nYour data may still exist under the old ID in Firebase.`;
+                  let title = '';
+                  let message = '';
+
+                  switch (syncStatus) {
+                    case 'synced':
+                      title = 'Cloud Sync Active';
+                      message = 'Your data is synced to the cloud and will be available on any device where you use this app.';
+                      break;
+                    case 'syncing':
+                      title = 'Syncing...';
+                      message = 'Your data is being synced to the cloud. Please wait.';
+                      break;
+                    case 'error':
+                      title = 'Sync Error';
+                      message = 'Unable to connect to cloud storage. Your data is saved locally on this device and will sync automatically when connection is restored.\n\nTry refreshing the page or check your internet connection.';
+                      break;
+                    default:
+                      title = 'Offline Mode';
+                      message = 'You are currently offline. Your data is saved locally and will sync when you reconnect.';
                   }
-                  alert(message);
+
+                  if (previousId) {
+                    message += '\n\n⚠️ Previous account detected. Your data may exist under the old ID.';
+                  }
+
+                  setModal({
+                    visible: true,
+                    title: title,
+                    message: message,
+                    onAction: syncStatus === 'error' ? () => {
+                      setModal({ visible: false, title: '', message: '', onAction: null, actionLabel: '', isImportHelp: false });
+                      window.location.reload();
+                    } : null,
+                    actionLabel: syncStatus === 'error' ? 'Refresh Page' : '',
+                    isImportHelp: false
+                  });
                 }}
                 className={`absolute top-0 right-0 inline-flex items-center gap-1 text-xs ${syncDisplay.color} hover:opacity-80 transition`}
               >
